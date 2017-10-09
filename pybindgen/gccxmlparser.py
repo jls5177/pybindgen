@@ -1107,7 +1107,7 @@ pybindgen.settings.error_handler = ErrorHandler()
 
                 for typedef in module_namespace.typedefs(function=self.location_filter,
                                                          recursive=False, allow_empty=True):
-                    typedef_type = declarations.remove_declarated(typedef.type)
+                    typedef_type = declarations.remove_declarated(typedef.decl_type)
                     if typedef_type == cls:
                         break
                 else:
@@ -1334,7 +1334,7 @@ pybindgen.settings.error_handler = ErrorHandler()
             for alias in module_namespace.typedefs(function=self.location_filter,
                                                    recursive=False, allow_empty=True):
 
-                type_from_name = normalize_name(str(alias.type))
+                type_from_name = normalize_name(str(alias.decl_type))
                 type_to_name = normalize_name(utils.ascii('::'.join([module.cpp_namespace_prefix, alias.name])))
 
                 for sym in '', '*', '&':
@@ -1345,10 +1345,10 @@ pybindgen.settings.error_handler = ErrorHandler()
 
                 ## Look for forward declarations of class/structs like
                 ## "typedef struct _Foo Foo"; these are represented in
-                ## pygccxml by a typedef whose .type.declaration is a
+                ## pygccxml by a typedef whose .decl_type.declaration is a
                 ## class_declaration_t instead of class_t.
-                if isinstance(alias.type, declarations.declarated_t):
-                    cls = alias.type.declaration
+                if isinstance(alias.decl_type, declarations.declarated_t):
+                    cls = alias.decl_type.declaration
                     if templates.is_instantiation(cls.decl_string):
                         continue # typedef to template instantiations, must be fully defined
                     if isinstance(cls, class_declaration_t):
@@ -1667,14 +1667,14 @@ pybindgen.settings.error_handler = ErrorHandler()
         for op in self.module_namespace.free_operators(function=self.location_filter,
                                                        allow_empty=True,
                                                        recursive=True):
-            _handle_operator(op, [arg.type for arg in op.arguments])
+            _handle_operator(op, [arg.decl_type for arg in op.arguments])
 
         for op in cls.member_operators(function=self.location_filter,
                                        allow_empty=True,
                                        recursive=True):
             if op.access_type != 'public':
                 continue
-            arg_types = [arg.type for arg in op.arguments]
+            arg_types = [arg.decl_type for arg in op.arguments]
             arg_types.insert(0, cls)
             _handle_operator(op, arg_types)
 
@@ -1701,7 +1701,7 @@ pybindgen.settings.error_handler = ErrorHandler()
                     have_trivial_constructor = True
 
                 elif len(member.arguments) == 1:
-                    traits = ctypeparser.TypeTraits(normalize_name(member.arguments[0].type.partial_decl_string))
+                    traits = ctypeparser.TypeTraits(normalize_name(member.arguments[0].decl_type.partial_decl_string))
                     if traits.type_is_reference and \
                             self.type_registry.root_module.get(str(traits.target), None) is class_wrapper:
                         have_copy_constructor = True
@@ -1762,7 +1762,7 @@ pybindgen.settings.error_handler = ErrorHandler()
                                                                     parameter_annotations.get('return', {}))
                 argument_specs = []
                 for arg in member.arguments:
-                    argument_specs.append(self.type_registry.lookup_parameter(arg.type, arg.name,
+                    argument_specs.append(self.type_registry.lookup_parameter(arg.decl_type, arg.name,
                                                                               parameter_annotations.get(arg.name, {}),
                                                                               arg.default_value))
 
@@ -1893,7 +1893,7 @@ pybindgen.settings.error_handler = ErrorHandler()
 
                 argument_specs = []
                 for arg in member.arguments:
-                    argument_specs.append(self.type_registry.lookup_parameter(arg.type, arg.name,
+                    argument_specs.append(self.type_registry.lookup_parameter(arg.decl_type, arg.name,
                                                                               default_value=arg.default_value))
 
                 arglist_repr = ("[" + ', '.join([_pygen_param(args_, kwargs_) for (args_, kwargs_) in argument_specs]) +  "]")
@@ -1925,7 +1925,7 @@ pybindgen.settings.error_handler = ErrorHandler()
                         arguments.append(Parameter.new(*a, **kw))
                     except (TypeLookupError, TypeConfigurationError) as ex:
                         warnings.warn_explicit("Parameter '%s %s' error (used in %s): %r"
-                                               % (arg.type.partial_decl_string, arg.name, member, ex),
+                                               % (arg.decl_type.partial_decl_string, arg.name, member, ex),
                                                WrapperWarning, member.location.file_name, member.location.line)
                         ok = False
                         break
@@ -1955,7 +1955,7 @@ pybindgen.settings.error_handler = ErrorHandler()
                 if member.access_type == 'private':
                     continue
 
-                real_type = declarations.remove_declarated(member.type)
+                real_type = declarations.remove_declarated(member.decl_type)
                 if hasattr(real_type, 'name') and not real_type.name:
                     warnings.warn_explicit("Member variable %s of class %s will not be wrapped, "
                                            "because wrapping member variables of anonymous types "
@@ -1964,7 +1964,7 @@ pybindgen.settings.error_handler = ErrorHandler()
                                            NotSupportedWarning, member.location.file_name, member.location.line)
                     continue
 
-                return_type_spec = self.type_registry.lookup_return(member.type, global_annotations)
+                return_type_spec = self.type_registry.lookup_return(member.decl_type, global_annotations)
 
                 ## pygen...
                 if 'pygen_comment' in global_annotations:
@@ -1972,27 +1972,27 @@ pybindgen.settings.error_handler = ErrorHandler()
                 if member.type_qualifiers.has_static:
                     pygen_sink.writeln("cls.add_static_attribute(%r, %s, is_const=%r)" %
                                        (member.name, _pygen_retval(*return_type_spec),
-                                        declarations.is_const(member.type)))
+                                        declarations.is_const(member.decl_type)))
                 else:
                     pygen_sink.writeln("cls.add_instance_attribute(%r, %s, is_const=%r)" %
                                        (member.name, _pygen_retval(*return_type_spec),
-                                        declarations.is_const(member.type)))
+                                        declarations.is_const(member.decl_type)))
 
                 ## convert the return value
                 try:
                     return_type = ReturnValue.new(*return_type_spec[0], **return_type_spec[1])
                 except (TypeLookupError, TypeConfigurationError) as ex:
                     warnings.warn_explicit("Return value '%s' error (used in %s): %r"
-                                           % (member.type.partial_decl_string, member, ex),
+                                           % (member.decl_type.partial_decl_string, member, ex),
                                            WrapperWarning, member.location.file_name, member.location.line)
                     continue
 
                 if member.type_qualifiers.has_static:
                     class_wrapper.add_static_attribute(member.name, return_type,
-                                                       is_const=declarations.is_const(member.type))
+                                                       is_const=declarations.is_const(member.decl_type))
                 else:
                     class_wrapper.add_instance_attribute(member.name, return_type,
-                                                         is_const=declarations.is_const(member.type))
+                                                         is_const=declarations.is_const(member.decl_type))
                 ## TODO: invoke post_scan_hooks
             elif isinstance(member, declarations.destructor_t):
                 pass
@@ -2145,10 +2145,10 @@ pybindgen.settings.error_handler = ErrorHandler()
             for argnum, arg in enumerate(fun.arguments):
                 annotations = parameter_annotations.get(arg.name, {})
                 if argnum == 0 and as_method is not None \
-                        and isinstance(arg.type, declarations.pointer_t):
+                        and isinstance(arg.decl_type, declarations.pointer_t):
                     annotations.setdefault("transfer_ownership", "false")
 
-                spec = self.type_registry.lookup_parameter(arg.type, arg.name,
+                spec = self.type_registry.lookup_parameter(arg.decl_type, arg.name,
                                                            annotations,
                                                            default_value=arg.default_value)
                 argument_specs.append(spec)
@@ -2156,13 +2156,13 @@ pybindgen.settings.error_handler = ErrorHandler()
                     arguments.append(Parameter.new(*spec[0], **spec[1]))
                 except (TypeLookupError, TypeConfigurationError) as ex:
                     warnings.warn_explicit("Parameter '%s %s' error (used in %s): %r"
-                                           % (arg.type.partial_decl_string, arg.name, fun, ex),
+                                           % (arg.decl_type.partial_decl_string, arg.name, fun, ex),
                                            WrapperWarning, fun.location.file_name, fun.location.line)
 
                     params_ok = False
                 except TypeError as ex:
                     warnings.warn_explicit("Parameter '%s %s' error (used in %s): %r"
-                                           % (arg.type.partial_decl_string, arg.name, fun, ex),
+                                           % (arg.decl_type.partial_decl_string, arg.name, fun, ex),
                                            WrapperWarning, fun.location.file_name, fun.location.line)
                     raise
 
