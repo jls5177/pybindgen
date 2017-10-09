@@ -990,11 +990,11 @@ pybindgen.settings.error_handler = ErrorHandler()
 
         ## scan enumerations
         if outer_class is None:
-            enums = module_namespace.enums(function=self.location_filter,
+            enums = module_namespace.enumerations(function=self.location_filter,
                                            recursive=False, allow_empty=True)
         else:
             enums = []
-            for enum in outer_class.gccxml_definition.enums(function=self.location_filter,
+            for enum in outer_class.gccxml_definition.enumerations(function=self.location_filter,
                                                             recursive=False, allow_empty=True):
                 if outer_class.gccxml_definition.find_out_member_access_type(enum) != 'public':
                     continue
